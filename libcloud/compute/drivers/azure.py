@@ -875,6 +875,167 @@ class AzureNodeDriver(NodeDriver):
 
         return True
 
+    def ex_stop_node(self, node, ex_cloud_service_name, ex_deployment_slot=None):
+
+        """
+        Stop the node by passing in the node object, does not work with instance store backed instances
+
+        :param      node: Node which should be used
+        :type       node: :class:`Node`
+
+        :rtype: ``bool``
+        """
+
+        if not ex_cloud_service_name:
+            raise ValueError("ex_cloud_service_name is required.")
+
+        if not ex_deployment_slot:
+            ex_deployment_slot = "production"
+
+        if not node:
+            raise ValueError("node is required.")
+
+        _deployment_name = self._get_deployment(
+            service_name=ex_cloud_service_name,
+            deployment_slot=ex_deployment_slot).name
+
+        try:
+            response = self._perform_post(
+                self._get_deployment_path_using_name(
+                    ex_cloud_service_name, _deployment_name) + '/roleinstances/'
+                + _str(node.id) + '/Operations',
+                AzureXmlSerializer.shutdown_role_operation_to_xml())
+
+            if response.status != 202:
+                raise LibcloudError('ex_stop_node: Message: %s, Body: %s, Status code: %d' %
+                                    (response.error, response.body,
+                                     response.status), driver=self)
+
+            # TODO: figure out how the async operations work, since they clearly don't server the intended purpose
+            # self._ex_complete_async_azure_operation(response, "ex_stop_node")
+
+            # provider_instance_stats = self._get_instance_status(ex_cloud_service_name, _deployment_name, node.id)
+
+        except Exception, e:
+            return False
+
+    def _get_instance_status(self, ex_cloud_service_name, ex_deployment_slot, name):
+
+            provider_instances = self._get_deployment(
+                        service_name=ex_cloud_service_name,
+                        deployment_slot=ex_deployment_slot)
+
+            for instance in provider_instances.role_instance_list:
+                if instance.instance_name == name:
+                    return instance.instance_status
+
+    def ex_start_node(self, node, ex_cloud_service_name, ex_deployment_slot=None):
+
+        """
+        Stop the node by passing in the node object, does not work with instance store backed instances
+
+        :param      node: Node which should be used
+        :type       node: :class:`Node`
+
+        :rtype: ``bool``
+        """
+
+        if not ex_cloud_service_name:
+            raise ValueError("ex_cloud_service_name is required.")
+
+        if not ex_deployment_slot:
+            ex_deployment_slot = "production"
+
+        if not node:
+            raise ValueError("node is required.")
+
+        _deployment_name = self._get_deployment(
+            service_name=ex_cloud_service_name,
+            deployment_slot=ex_deployment_slot).name
+
+        try:
+            response = self._perform_post(
+
+                self._get_deployment_path_using_name(
+                    ex_cloud_service_name, _deployment_name) + '/roleinstances/'
+                + _str(node.id) + '/Operations',
+                AzureXmlSerializer.start_role_operation_to_xml())
+
+            if response.status != 202:
+                raise LibcloudError('ex_start_node: Message: %s, Body: %s, Status code: %d' %
+                                    (response.error, response.body,
+                                     response.status), driver=self)
+
+            # TODO: figure out how the async operations work, since they clearly don't server the intended purpose
+            # self._ex_complete_async_azure_operation(response, "ex_start_node")
+
+            # provider_instance_status = self._get_instance_status(ex_cloud_service_name, _deployment_name, node.id)
+
+        except Exception, e:
+            return False
+
+    def ex_change_node_size(self, node, ex_cloud_service_name, new_size):
+        """
+        Change the node size.
+        Note: Node must be turned of before changing the size.
+
+        See details here: http://msdn.microsoft.com/en-us/library/azure/jj157187.aspx
+
+        :param      node: Node instance
+        :type       node: :class:`Node`
+
+        :param      new_size: NodeSize instance
+        :type       new_size: :class:`NodeSize`
+
+        :return: True on success, False otherwise.
+        :rtype: ``bool``
+        """
+        if 'instancetype' in node.extra:
+            current_instance_type = node.extra['instancetype']
+
+            if current_instance_type == new_size.id:
+                raise ValueError('New instance size is the same as' +
+                                 'the current one')
+
+        if not ex_cloud_service_name:
+            raise ValueError("ex_cloud_service_name is required.")
+
+        ex_deployment_slot = "Production"
+
+        name = node.id
+        size = new_size.id
+
+        _deployment_name = self._get_deployment(
+            service_name=ex_cloud_service_name,
+            deployment_slot=ex_deployment_slot).name
+
+        # if self._parse_response_for_async_op(response):
+        #    return True
+        # else:
+        #    return False
+
+        response = self._perform_put(
+            self._get_role_path(ex_cloud_service_name, _deployment_name, name),
+            AzureXmlSerializer.update_role_to_xml(
+                None,         # ---
+                              # ---
+                None,         # os_virtual_hard_disk (OSVirtualHardDsk)
+                None,         # ---
+                None,         # network_configuration_set (ConfigurationSetType=NetworkConfiguration)
+                None,         # availability_set_name (AvailabilitySetName)
+                None,         # data_virtual_hard_disks (DataVirtualHardDisks)
+                size          # role_size (RoleSize)
+            )
+            # TODO: need to add proper return True / False
+        )
+
+        if response.status != 202:
+            raise LibcloudError('ex_change_node_size: Message: %s, Body: %s, Status code: %d' %
+                                (response.error, response.body,
+                                 response.status), driver=self)
+        # TODO: figure out how the async operations work, since they clearly don't server the intended purpose
+        # self._ex_complete_async_azure_operation(response, "ex_stop_node")
+
     def ex_list_cloud_services(self):
         return self._perform_get(
             self._get_hosted_service_path(),
